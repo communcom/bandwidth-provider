@@ -1,0 +1,50 @@
+version: '2.1'
+services:
+  node:
+    container_name: bandwidth-provider-node
+    restart: always
+    depends_on:
+      - bandwidth_mongo
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      - services-tier
+    ports:
+      - $GLS_CONNECTOR_HOST:$GLS_CONNECTOR_PORT:$GLS_CONNECTOR_PORT
+    env_file:
+      - .env
+
+  bandwidth_mongo:
+    container_name: bandwidth_mongo
+    image: mongo
+    restart: always
+    healthcheck:
+      test: mongo --eval 'db.getCollectionNames()'
+      interval: 10s
+      timeout: 2s
+      retries: 10
+    volumes:
+      - badwidth_mongodb_vol:/data/db
+    networks:
+      - services-tier
+
+  mongodb-exporter:
+    container_name: mongodb-exporter
+    image: cyberway/mongodb-exporter:v0.6.2
+    restart: always
+    depends_on:
+      bandwidth_mongo:
+        condition: service_healthy
+    ports:
+      - 9216:9216
+    environment:
+      - MONGODB_URI=mongodb://bandwidth_mongo:27017
+    networks:
+      - services-tier
+
+networks:
+  services-tier:
+
+volumes:
+  badwidth_mongodb_vol:
