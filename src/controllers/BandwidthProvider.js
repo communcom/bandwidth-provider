@@ -43,16 +43,12 @@ class BandwidthProvider extends BasicController {
         params: { transaction, chainId },
     }) {
         try {
-            const rawTrx = this._decodeTransaction(transaction);
-            const trx = await this._deserializeTransaction(rawTrx);
-            const isNeedProviding = this._verifyActionsAndCheckIsNeedProviding(trx);
-
-            let finalTrx = rawTrx;
-
-            if (isNeedProviding) {
-                await this._checkWhitelist({ user, channelId });
-                finalTrx = await this._signTransaction(rawTrx, { chainId });
-            }
+            const { finalTrx, trx } = await this._prepareFinalTrx({
+                transaction,
+                user,
+                channelId,
+                chainId,
+            });
 
             this._logEntry({ user, transaction: trx, isSigned: isNeedProviding });
 
@@ -207,16 +203,14 @@ class BandwidthProvider extends BasicController {
         auth: { user },
         params: { transaction, chainId },
     }) {
-        const rawTrx = this._decodeTransaction(transaction);
-        const trx = await this._deserializeTransaction(rawTrx);
-        const isNeedProviding = this._verifyActionsAndCheckIsNeedProviding(trx);
-        const { action, auth } = this._checkProposalRestrictionsAndGetAction(trx, user);
-        let finalTrx = rawTrx;
+        const { finalTrx, trx } = await this._prepareFinalTrx({
+            transaction,
+            user,
+            channelId,
+            chainId,
+        });
 
-        if (isNeedProviding) {
-            await this._checkWhitelist({ user, channelId });
-            finalTrx = await this._signTransaction(rawTrx, { chainId });
-        }
+        const { action, auth } = this._checkProposalRestrictionsAndGetAction(trx, user);
 
         const proposal = await ProposalModel.create({
             initiatorId: user,
@@ -372,6 +366,20 @@ class BandwidthProvider extends BasicController {
         } catch (err) {
             this._processTransactionPushError(err);
         }
+    }
+
+    async _prepareFinalTrx({ transaction, user, channelId, chainId }) {
+        const rawTrx = this._decodeTransaction(transaction);
+        const trx = await this._deserializeTransaction(rawTrx);
+        const isNeedProviding = this._verifyActionsAndCheckIsNeedProviding(trx);
+
+        let finalTrx = rawTrx;
+
+        if (isNeedProviding) {
+            await this._checkWhitelist({ user, channelId });
+            finalTrx = await this._signTransaction(rawTrx, { chainId });
+        }
+        return { finalTrx, trx };
     }
 }
 
