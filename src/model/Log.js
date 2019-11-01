@@ -21,10 +21,6 @@ module.exports = MongoDB.makeModel(
             type: Object,
             required: true,
         },
-        providedBandwidth: {
-            required: true,
-            type: Boolean,
-        },
     },
     {
         index: [

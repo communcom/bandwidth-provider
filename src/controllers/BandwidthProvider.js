@@ -40,14 +40,14 @@ class BandwidthProvider extends BasicController {
         params: { transaction, chainId },
     }) {
         try {
-            const { finalTrx, trx, isSigned } = await this._prepareFinalTrx({
+            const { finalTrx, trx } = await this._prepareFinalTrx({
                 transaction,
                 user,
                 channelId,
                 chainId,
             });
 
-            await this._logEntry({ user, transaction: trx, isSigned });
+            await this._logEntry({ user, transaction: trx });
 
             return await this._sendTransaction(finalTrx);
         } catch (err) {
@@ -200,13 +200,17 @@ class BandwidthProvider extends BasicController {
         const trx = await this._deserializeTransaction(rawTrx);
         const isNeedProviding = this._verifyActionsAndCheckIsNeedProviding(trx);
 
-        let finalTrx = rawTrx;
-
-        if (isNeedProviding) {
-            await this._checkWhitelist({ user, channelId });
-            finalTrx = await this._signTransaction(rawTrx, { chainId });
+        if (!isNeedProviding) {
+            throw {
+                code: 1103,
+                message: 'Transaction does not have providebw action',
+            };
         }
-        return { finalTrx, trx, isSigned: isNeedProviding };
+
+        await this._checkWhitelist({ user, channelId });
+        const finalTrx = await this._signTransaction(rawTrx, { chainId });
+
+        return { finalTrx, trx };
     }
 }
 
