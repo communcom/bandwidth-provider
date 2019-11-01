@@ -33,18 +33,6 @@ class Connector extends BasicConnector {
                     handler: provider.provideBandwidth,
                     scope: provider,
                 },
-                'bandwidth.createProposal': {
-                    handler: provider.createProposal,
-                    scope: provider,
-                },
-                'bandwidth.getProposals': {
-                    handler: provider.getProposals,
-                    scope: provider,
-                },
-                'bandwidth.signAndExecuteProposal': {
-                    handler: provider.signAndExecuteProposal,
-                    scope: provider,
-                },
                 'bandwidth.banUser': {
                     handler: whitelist.banUser,
                     scope: whitelist,
