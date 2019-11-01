@@ -40,14 +40,14 @@ class BandwidthProvider extends BasicController {
         params: { transaction, chainId },
     }) {
         try {
-            const { finalTrx, trx } = await this._prepareFinalTrx({
+            const { finalTrx, trx, isSigned } = await this._prepareFinalTrx({
                 transaction,
                 user,
                 channelId,
                 chainId,
             });
 
-            this._logEntry({ user, transaction: trx, isSigned: isNeedProviding });
+            await this._logEntry({ user, transaction: trx, isSigned });
 
             return await this._sendTransaction(finalTrx);
         } catch (err) {
@@ -206,7 +206,7 @@ class BandwidthProvider extends BasicController {
             await this._checkWhitelist({ user, channelId });
             finalTrx = await this._signTransaction(rawTrx, { chainId });
         }
-        return { finalTrx, trx };
+        return { finalTrx, trx, isSigned: isNeedProviding };
     }
 }
 
