@@ -5,6 +5,7 @@ const { JsonRpc, Api, Serialize } = require('cyberwayjs');
 const JsSignatureProvider = require('cyberwayjs/dist/eosjs-jssig').default;
 const BasicController = core.controllers.Basic;
 const Logger = core.utils.Logger;
+const ALLOWED_CONTRACTS = require('../data/allowedContracts');
 const Log = require('../utils/Log');
 
 const {
@@ -116,6 +117,14 @@ class BandwidthProvider extends BasicController {
         }
 
         for (const action of actions) {
+            if (!ALLOWED_CONTRACTS.includes(action.account)) {
+                throw {
+                    code: 1104,
+                    message: `Transaction contains action of a contract, which is not allowed: ${action.account}.
+                         Allowed contracts: ${ALLOWED_CONTRACTS}`,
+                };
+            }
+
             if (provideBwActions.includes(action)) {
                 continue;
             }
