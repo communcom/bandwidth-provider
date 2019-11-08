@@ -8,7 +8,7 @@ module.exports = MongoDB.makeModel(
             type: String,
             required: true,
         },
-        banned: {
+        isBanned: {
             type: Boolean,
             required: true,
         },
