@@ -51,6 +51,8 @@ class WhitelistController extends BasicController {
         }
 
         // todo: check if is in user blacklist
+
+        return true;
     }
 
     async _isAllowedInSystem({ channelId, user }) {
