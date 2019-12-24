@@ -65,6 +65,10 @@ class BandwidthProvider extends BasicController {
             };
         }
 
+        if (err && err.code) {
+            throw err;
+        }
+
         throw {
             code: 500,
             message: `Failed to transact: ${err}`,
@@ -208,7 +212,7 @@ class BandwidthProvider extends BasicController {
         const communityIds = [];
 
         for (const action of trx.actions) {
-            const { commun_code: communityId } = action;
+            const { commun_code: communityId } = action.data;
 
             if (communityId) {
                 communityIds.push(communityId);
