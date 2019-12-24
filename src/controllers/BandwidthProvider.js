@@ -149,10 +149,10 @@ class BandwidthProvider extends BasicController {
         return true;
     }
 
-    async _checkWhitelist({ channelId, user, communityIds }) {
+    async _checkWhitelist({ channelId, user, communityIds, userIds }) {
         let isAllowed = false;
         try {
-            isAllowed = await this._whitelist.isAllowed({ channelId, user, communityIds });
+            isAllowed = await this._whitelist.isAllowed({ channelId, user, communityIds, userIds });
         } catch (error) {
             Logger.error('Whitelist check failed:', JSON.stringify(error, null, 4));
             throw error;
@@ -222,6 +222,22 @@ class BandwidthProvider extends BasicController {
         return communityIds;
     }
 
+    _extractUserIds(trx) {
+        const userIds = [];
+
+        for (const { data } of trx.actions) {
+            if (data.pinning) {
+                userIds.push(data.pinning);
+            }
+
+            if (data.message_id) {
+                userIds.push(data.message_id.author);
+            }
+        }
+
+        return userIds;
+    }
+
     async _prepareFinalTrx({ transaction, user, channelId, chainId }) {
         const rawTrx = this._decodeTransaction(transaction);
         const trx = await this._deserializeTransaction(rawTrx);
@@ -234,8 +250,9 @@ class BandwidthProvider extends BasicController {
             };
         }
         const communityIds = this._extractCommunityIds(trx);
+        const userIds = this._extractUserIds(trx);
 
-        await this._checkWhitelist({ user, channelId, communityIds });
+        await this._checkWhitelist({ user, channelId, communityIds, userIds });
         const finalTrx = await this._signTransaction(rawTrx, { chainId });
 
         return { finalTrx, trx };

@@ -9,8 +9,6 @@ class WhitelistController extends BasicController {
         super({ connector });
 
         this._storage = storage;
-
-        this._blacklistStateStorage = new Map();
     }
 
     async _askRegService({ user }) {
@@ -30,7 +28,7 @@ class WhitelistController extends BasicController {
         this._storage.handleOffline({ user, channelId });
     }
 
-    async isAllowed({ channelId, user, communityIds }) {
+    async isAllowed({ channelId, user, communityIds, userIds }) {
         const isAllowedInSystem = await this._isAllowedInSystem({ channelId, user });
 
         // not registered in reg service or explicitly banned
@@ -47,9 +45,12 @@ class WhitelistController extends BasicController {
             return false;
         }
 
-        // todo: check if is in user blacklist
+        const isAllowedInUser = await this._isAllowedInUser({
+            userId: user,
+            targetUserIds: userIds,
+        });
 
-        return true;
+        return isAllowedInUser.isAllowed;
     }
 
     async _isAllowedInSystem({ channelId, user }) {
