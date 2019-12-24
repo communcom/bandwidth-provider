@@ -113,7 +113,9 @@ class WhitelistController extends BasicController {
 
         const isInBlacklist = await Promise.all(isInBlacklistPromises);
 
-        const restrictedUsers = isInBlacklist.filter(isBanned => isBanned);
+        const restrictedUsers = isInBlacklist.filter(isBanned => {
+            return isBanned === true;
+        });
 
         return {
             isAllowed: restrictedUsers.length === 0,
