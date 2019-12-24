@@ -206,6 +206,15 @@ class BandwidthProvider extends BasicController {
 
     _extractCommunityIds(trx) {
         const communityIds = [];
+
+        for (const action of trx.actions) {
+            const { commun_code: communityId } = action;
+
+            if (communityId) {
+                communityIds.push(communityId);
+            }
+        }
+
         return communityIds;
     }
 
