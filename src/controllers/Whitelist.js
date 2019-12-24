@@ -38,13 +38,10 @@ class WhitelistController extends BasicController {
             return false;
         }
 
-        // todo: check if is in community blacklist
         const isAllowedInCommunities = await this._isAllowedInCommunities({
             userId: user,
             communityIds,
         });
-
-        //todo: save communities blacklist
 
         if (!isAllowedInCommunities.isAllowed) {
             return false;
@@ -96,11 +93,12 @@ class WhitelistController extends BasicController {
 
         const isInBlacklist = await Promise.all(isInBlacklistPromises);
 
-        const restrictedCommunities = isInBlacklist.filter(isBanned => isBanned);
+        const restrictedCommunities = isInBlacklist.filter(isBanned => {
+            return isBanned === true;
+        });
 
         return {
             isAllowed: restrictedCommunities.length === 0,
-            restrictedCommunities,
         };
     }
 
