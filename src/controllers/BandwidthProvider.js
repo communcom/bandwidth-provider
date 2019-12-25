@@ -5,8 +5,8 @@ const { JsonRpc, Api, Serialize } = require('cyberwayjs');
 const JsSignatureProvider = require('cyberwayjs/dist/eosjs-jssig').default;
 const BasicController = core.controllers.Basic;
 const Logger = core.utils.Logger;
+const ALLOWED_CONTRACTS = require('../data/allowedContracts');
 const Log = require('../utils/Log');
-const ProposalModel = require('../model/Proposal');
 
 const {
     GLS_PROVIDER_WIF,
@@ -14,8 +14,6 @@ const {
     GLS_PROVIDER_USERNAME,
     GLS_CYBERWAY_HTTP_URL,
 } = require('../data/env');
-
-const PROPOSAL_ALLOWED_CONTRACTS = ['gls.vesting::delegate'];
 
 const rpc = new JsonRpc(GLS_CYBERWAY_HTTP_URL, { fetch });
 
@@ -43,18 +41,14 @@ class BandwidthProvider extends BasicController {
         params: { transaction, chainId },
     }) {
         try {
-            const rawTrx = this._decodeTransaction(transaction);
-            const trx = await this._deserializeTransaction(rawTrx);
-            const isNeedProviding = this._verifyActionsAndCheckIsNeedProviding(trx);
+            const { finalTrx, trx } = await this._prepareFinalTrx({
+                transaction,
+                user,
+                channelId,
+                chainId,
+            });
 
-            let finalTrx = rawTrx;
-
-            if (isNeedProviding) {
-                await this._checkWhitelist({ user, channelId });
-                finalTrx = await this._signTransaction(rawTrx, { chainId });
-            }
-
-            this._logEntry({ user, transaction: trx, isSigned: isNeedProviding });
+            await this._logEntry({ user, transaction: trx });
 
             return await this._sendTransaction(finalTrx);
         } catch (err) {
@@ -69,6 +63,10 @@ class BandwidthProvider extends BasicController {
                 message: 'Unexpected blockchain error',
                 data: err.json,
             };
+        }
+
+        if (err && err.code) {
+            throw err;
         }
 
         throw {
@@ -123,6 +121,14 @@ class BandwidthProvider extends BasicController {
         }
 
         for (const action of actions) {
+            if (!ALLOWED_CONTRACTS.includes(action.account)) {
+                throw {
+                    code: 1104,
+                    message: `Transaction contains action of a contract, which is not allowed: ${action.account}.
+                         Allowed contracts: ${ALLOWED_CONTRACTS}`,
+                };
+            }
+
             if (provideBwActions.includes(action)) {
                 continue;
             }
@@ -143,10 +149,10 @@ class BandwidthProvider extends BasicController {
         return true;
     }
 
-    async _checkWhitelist({ channelId, user }) {
+    async _checkWhitelist({ channelId, user, communityIds, userIds }) {
         let isAllowed = false;
         try {
-            isAllowed = await this._whitelist.isAllowed({ channelId, user });
+            isAllowed = await this._whitelist.isAllowed({ channelId, user, communityIds, userIds });
         } catch (error) {
             Logger.error('Whitelist check failed:', JSON.stringify(error, null, 4));
             throw error;
@@ -202,176 +208,54 @@ class BandwidthProvider extends BasicController {
         }
     }
 
-    async createProposal({
-        routing: { channelId },
-        auth: { user },
-        params: { transaction, chainId },
-    }) {
+    _extractCommunityIds(trx) {
+        const communityIds = [];
+
+        for (const action of trx.actions) {
+            const { commun_code: communityId } = action.data;
+
+            if (communityId) {
+                communityIds.push(communityId);
+            }
+        }
+
+        return communityIds;
+    }
+
+    _extractUserIds(trx) {
+        const userIds = [];
+
+        for (const { data } of trx.actions) {
+            if (data.pinning) {
+                userIds.push(data.pinning);
+            }
+
+            if (data.message_id) {
+                userIds.push(data.message_id.author);
+            }
+        }
+
+        return userIds;
+    }
+
+    async _prepareFinalTrx({ transaction, user, channelId, chainId }) {
         const rawTrx = this._decodeTransaction(transaction);
         const trx = await this._deserializeTransaction(rawTrx);
         const isNeedProviding = this._verifyActionsAndCheckIsNeedProviding(trx);
-        const { action, auth } = this._checkProposalRestrictionsAndGetAction(trx, user);
-        let finalTrx = rawTrx;
 
-        if (isNeedProviding) {
-            await this._checkWhitelist({ user, channelId });
-            finalTrx = await this._signTransaction(rawTrx, { chainId });
-        }
-
-        const proposal = await ProposalModel.create({
-            initiatorId: user,
-            waitingFor: {
-                userId: auth.actor,
-                permission: auth.permission,
-            },
-            expirationTime: new Date(trx.expiration + 'Z'),
-            action,
-            serializedTransaction: transaction.serializedTransaction,
-            signatures: finalTrx.signatures,
-        });
-
-        return {
-            proposalId: proposal._id,
-        };
-    }
-
-    _checkProposalRestrictionsAndGetAction({ actions }, user) {
-        const targetActions = actions.filter(action => !this._isBWProvideAction(action));
-
-        if (targetActions.length !== 1) {
+        if (!isNeedProviding) {
             throw {
-                code: 1134,
-                message:
-                    targetActions.length === 0
-                        ? 'No action for providing'
-                        : 'Allowed only one action for providing',
+                code: 1103,
+                message: 'Transaction does not have providebw action',
             };
         }
+        const communityIds = this._extractCommunityIds(trx);
+        const userIds = this._extractUserIds(trx);
 
-        const [targetAction] = targetActions;
+        await this._checkWhitelist({ user, channelId, communityIds, userIds });
+        const finalTrx = await this._signTransaction(rawTrx, { chainId });
 
-        const contractMethod = `${targetAction.account}::${targetAction.name}`;
-
-        if (!PROPOSAL_ALLOWED_CONTRACTS.includes(contractMethod)) {
-            throw {
-                code: 1135,
-                message: `Contract method '${contractMethod}' is not allowed for creating proposal`,
-            };
-        }
-
-        const needAuthFor = targetAction.authorization.filter(auth => auth.actor !== user);
-
-        if (needAuthFor.length !== 1) {
-            throw {
-                code: 1136,
-                message:
-                    needAuthFor.length === 0
-                        ? 'List of awaiting signs is empty'
-                        : 'Proposal have more than one awaiting signs',
-            };
-        }
-
-        return {
-            action: targetAction,
-            auth: needAuthFor[0],
-        };
-    }
-
-    async getProposals({ auth: { user }, params: { contract, method } }) {
-        const items = await ProposalModel.find(
-            {
-                'waitingFor.userId': user,
-                'action.account': contract,
-                'action.name': method,
-                expirationTime: {
-                    $gt: new Date(),
-                },
-            },
-            {
-                _id: true,
-                initiatorId: true,
-                action: true,
-                serializedTransaction: true,
-                expirationTime: true,
-            },
-            {
-                lean: true,
-            }
-        );
-
-        let usernames = {};
-
-        try {
-            const results = await this.callService('prism', 'getUsernames', {
-                userIds: items.map(({ initiatorId }) => initiatorId),
-            });
-
-            usernames = results.usernames;
-        } catch (err) {
-            Logger.warn('getUsernames failed:', err.message);
-        }
-
-        for (const item of items) {
-            item.proposalId = item._id;
-            item._id = undefined;
-            item.initiatorUsername = usernames[item.initiatorId] || null;
-        }
-
-        return {
-            items,
-        };
-    }
-
-    async signAndExecuteProposal({ auth: { user }, params: { proposalId, signature } }) {
-        const proposal = await ProposalModel.findOne(
-            {
-                _id: proposalId,
-                'waitingFor.userId': user,
-            },
-            {
-                serializedTransaction: true,
-                signatures: true,
-            },
-            {
-                lean: true,
-            }
-        );
-
-        if (!proposal) {
-            throw {
-                code: 404,
-                message: 'Proposal not found',
-            };
-        }
-
-        const signatures = proposal.signatures;
-
-        if (!signatures.includes(signature)) {
-            signatures.push(signature);
-        }
-
-        const serializedTransaction = this._decodeSerializedTransaction(
-            proposal.serializedTransaction
-        );
-
-        try {
-            const results = await api.pushSignedTransaction({
-                signatures,
-                serializedTransaction,
-            });
-
-            try {
-                await ProposalModel.deleteOne({
-                    _id: proposalId,
-                });
-            } catch (err) {
-                Logger.error('Proposal deleting failed:', err);
-            }
-
-            return results;
-        } catch (err) {
-            this._processTransactionPushError(err);
-        }
+        return { finalTrx, trx };
     }
 }
 

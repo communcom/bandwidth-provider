@@ -28,24 +28,45 @@ class WhitelistController extends BasicController {
         this._storage.handleOffline({ user, channelId });
     }
 
-    async isAllowed({ channelId, user }) {
-        // in memory -> allowed
-        if (this._storage.isStored({ channelId, user })) {
+    async isAllowed({ channelId, user, communityIds, userIds }) {
+        const isAllowedInSystem = await this._isAllowedInSystem({ channelId, user });
+
+        // not registered in reg service or explicitly banned
+        if (!isAllowedInSystem) {
+            return false;
+        }
+
+        const isAllowedInCommunities = await this._isAllowedInCommunities({
+            userId: user,
+            communityIds,
+        });
+
+        if (!isAllowedInCommunities.isAllowed) {
+            return false;
+        }
+
+        const isAllowedInUser = await this._isAllowedInUser({
+            userId: user,
+            targetUserIds: userIds,
+        });
+
+        return isAllowedInUser.isAllowed;
+    }
+
+    async _isAllowedInSystem({ channelId, user }) {
+        // in memory
+        const isStoredCache = this._storage.isStored({ channelId, user });
+
+        if (isStoredCache) {
             return true;
         }
 
         const dbUser = await Whitelist.findOne({ user });
 
-        // explicitly banned -> not allowed
-        if (dbUser && dbUser.banned) {
-            return false;
-        }
-
-        // in db -> allowed and should be stored in memory
-        if (dbUser && !dbUser.banned) {
-            this._storage.addInMemoryDb({ user: dbUser.user, channelId });
-
-            return true;
+        if (dbUser) {
+            if (!dbUser.isBanned) {
+                return true;
+            }
         }
 
         if (env.GLS_REGISTRATION_ENABLED) {
@@ -57,14 +78,53 @@ class WhitelistController extends BasicController {
         }
 
         // in reg service -> add to mongo and to in-mem
-        await Whitelist.create({ user, banned: false });
+        await Whitelist.create({ user, isBanned: false });
         this._storage.addInMemoryDb({ user, channelId });
 
         return true;
     }
 
+    async _isAllowedInCommunities({ userId, communityIds }) {
+        const isInBlacklistPromises = [];
+        for (const communityId of communityIds) {
+            isInBlacklistPromises.push(
+                this.callService('prism', 'isInCommunityBlacklist', { userId, communityId })
+            );
+        }
+
+        const isInBlacklist = await Promise.all(isInBlacklistPromises);
+
+        const restrictedCommunities = isInBlacklist.filter(isBanned => {
+            return isBanned === true;
+        });
+
+        return {
+            isAllowed: restrictedCommunities.length === 0,
+        };
+    }
+
+    async _isAllowedInUser({ userId, targetUserIds }) {
+        const isInBlacklistPromises = [];
+        for (const targetUserId of targetUserIds) {
+            isInBlacklistPromises.push(
+                this.callService('prism', 'isInUserBlacklist', { userId, targetUserId })
+            );
+        }
+
+        const isInBlacklist = await Promise.all(isInBlacklistPromises);
+
+        const restrictedUsers = isInBlacklist.filter(isBanned => {
+            return isBanned === true;
+        });
+
+        return {
+            isAllowed: restrictedUsers.length === 0,
+            restrictedUsers,
+        };
+    }
+
     async banUser({ user }) {
-        await Whitelist.findOneAndUpdate({ user }, { banned: true });
+        await Whitelist.findOneAndUpdate({ user }, { isBanned: true });
 
         this._storage.removeFromMemoryDb(user);
     }
