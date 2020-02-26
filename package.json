@@ -10,12 +10,12 @@
   "license": "GPL-3.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/GolosChain/bandwidth-service.git"
+    "url": "git+https://github.com/communcom/bandwidth-provider.git"
   },
   "bugs": {
-    "url": "https://github.com/GolosChain/bandwidth-service/issues"
+    "url": "https://github.com/communcom/bandwidth-provider/issues"
   },
-  "homepage": "https://github.com/GolosChain/bandwidth-service#readme",
+  "homepage": "https://github.com/communcom/bandwidth-provider#readme",
   "dependencies": {
     "@types/node-fetch": "^2.1.4",
     "@types/text-encoding": "0.0.35",
