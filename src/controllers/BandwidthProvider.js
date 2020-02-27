@@ -233,6 +233,10 @@ class BandwidthProvider extends BasicController {
             if (data.message_id) {
                 userIds.push(data.message_id.author);
             }
+
+            if (data.parent_id) {
+                userIds.push(data.parent_id.author);
+            }
         }
 
         return userIds;
