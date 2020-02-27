@@ -1,6 +1,6 @@
 {
   "name": "badwidth-service",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Bandwidth provider service",
   "main": "./src/Main.js",
   "scripts": {
