@@ -230,11 +230,11 @@ class BandwidthProvider extends BasicController {
                 userIds.push(data.pinning);
             }
 
-            if (data.message_id) {
+            if (data.message_id && data.message_id.author) {
                 userIds.push(data.message_id.author);
             }
 
-            if (data.parent_id) {
+            if (data.parent_id && data.parent_id.author) {
                 userIds.push(data.parent_id.author);
             }
         }
