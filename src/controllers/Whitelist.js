@@ -86,6 +86,11 @@ class WhitelistController extends BasicController {
 
     async _isAllowedInCommunities({ userId, communityIds }) {
         const isInBlacklistPromises = [];
+
+        // make sure that there is at least one request to prism
+        // so global ban check works as well
+        if (communityIds.length === 0) communityIds.push('');
+
         for (const communityId of communityIds) {
             isInBlacklistPromises.push(
                 this.callService('prism', 'isInCommunityBlacklist', { userId, communityId })
