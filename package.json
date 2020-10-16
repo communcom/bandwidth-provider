@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node src/index.js"
   },
-  "author": "commun",
-  "license": "GPL-3.0",
+  "author": "commun.com",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/communcom/bandwidth-provider.git"
